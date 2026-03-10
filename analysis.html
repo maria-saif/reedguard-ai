@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ReedGuard AI • التحليل الذكي</title>
+  <link rel="stylesheet" href="style.css" />
+
+  <style>
+    .page-head{ padding: 34px 0 10px; }
+    .crumbs{ display:flex; gap:10px; flex-wrap:wrap; color: rgba(47,62,58,0.72); font-size: 13px; }
+    .crumbs a{ color: var(--green-dark); font-weight: 700; }
+
+    .grid{
+      display:grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap:14px;
+      align-items:start;
+      padding: 16px 0 46px;
+    }
+
+    .map{
+      position:relative;
+      border-radius:22px;
+      overflow:hidden;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,0.72);
+      box-shadow: var(--shadow);
+      min-height: 470px;
+      isolation:isolate;
+    }
+
+    .map .topbar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding: 14px 14px 10px;
+      border-bottom: 1px solid rgba(31,95,74,0.10);
+      background: rgba(246,251,248,0.7);
+      backdrop-filter: blur(12px);
+    }
+    .map .topbar .title{ display:flex; flex-direction:column; gap:4px; }
+    .map .topbar strong{ color: var(--green-dark); }
+    .map .topbar small{ color: rgba(47,62,58,0.72); }
+
+    .map .canvas{
+      position:relative;
+      height: 380px;
+      padding: 16px;
+      background:
+        radial-gradient(900px 450px at 15% 10%, rgba(123,200,164,0.20), transparent 60%),
+        radial-gradient(900px 450px at 85% 25%, rgba(31,95,74,0.10), transparent 55%),
+        linear-gradient(180deg, rgba(255,255,255,0.8), rgba(255,255,255,0.55));
+    }
+
+    .heat{
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      opacity:.75;
+      mix-blend-mode:multiply;
+      filter: blur(14px) saturate(1.2);
+      transform: translateZ(0);
+    }
+    .heat::before{
+      content:"";
+      position:absolute; inset:0;
+      background:
+        radial-gradient(240px 220px at 78% 18%, rgba(235,74,74,0.00), transparent 60%),
+        radial-gradient(260px 240px at 20% 42%, rgba(235,74,74,0.00), transparent 60%),
+        radial-gradient(280px 260px at 68% 82%, rgba(235,74,74,0.00), transparent 60%);
+      transition: .35s ease;
+    }
+
+    .zone{
+      position:absolute;
+      border-radius: 18px;
+      border: 1px solid rgba(31,95,74,0.18);
+      background: rgba(123,200,164,0.22);
+      box-shadow: 0 16px 30px rgba(0,0,0,0.06);
+      backdrop-filter: blur(10px);
+      padding: 10px 10px 8px;
+      width: 220px;
+      transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, background .18s ease;
+      cursor:pointer;
+      user-select:none;
+    }
+    .zone:hover{
+      transform: translateY(-3px);
+      box-shadow: 0 22px 40px rgba(0,0,0,0.10);
+      border-color: rgba(31,95,74,0.28);
+    }
+    .zone.active{
+      outline: 3px solid rgba(31,95,74,0.16);
+      transform: translateY(-4px) scale(1.01);
+    }
+
+    .zone h4{ margin:0 0 6px; font-size: 14px; color: var(--green-dark); display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .tiny{ font-size: 11.5px; color: rgba(47,62,58,0.65); font-weight: 700; }
+
+    .meta{ display:flex; gap:8px; flex-wrap:wrap; }
+
+    .pill{
+      font-size: 12px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(31,95,74,0.14);
+      background: rgba(255,255,255,0.75);
+      color: rgba(47,62,58,0.85);
+      font-weight: 750;
+      transition: .2s ease;
+      white-space:nowrap;
+    }
+    .pill.good{ border-color: rgba(31,95,74,0.22); color: var(--green-dark); }
+    .pill.warn{ border-color: rgba(235,74,74,0.25); color: rgba(145,26,26,0.92); background: rgba(235,74,74,0.10); }
+
+    .sev-watch{ background: rgba(123,200,164,0.14); }
+    .sev-harvest{ background: rgba(31,95,74,0.14); }
+    .sev-urgent{ background: rgba(235,74,74,0.12); border-color: rgba(235,74,74,0.22); }
+
+    .legend{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      padding: 12px 14px 14px;
+      border-top: 1px solid rgba(31,95,74,0.10);
+      background: rgba(255,255,255,0.55);
+    }
+    .legend-item{ display:flex; align-items:center; gap:8px; font-size: 13px; color: rgba(47,62,58,0.78); }
+    .swatch{ width:12px; height:12px; border-radius:4px; border:1px solid rgba(31,95,74,0.18); background: rgba(123,200,164,0.18); }
+    .swatch.dark{ background: rgba(235,74,74,0.12); border-color: rgba(235,74,74,0.22); }
+    .swatch.mid{ background: rgba(31,95,74,0.16); }
+
+    .stack{ display:grid; gap:14px; }
+
+    .result{
+      border:1px solid var(--border);
+      background: rgba(255,255,255,0.74);
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+    .result h3{ margin:0 0 8px; color: var(--green-dark); font-size: 16px; }
+    .result p{ margin:0 0 14px; color: rgba(47,62,58,0.80); line-height: 1.75; font-size: 13.8px; }
+
+    .grid2{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+    .stat{
+      border:1px solid rgba(31,95,74,0.12);
+      background: rgba(246,251,248,0.75);
+      border-radius: 16px;
+      padding: 12px;
+      position:relative;
+      overflow:hidden;
+    }
+    .stat small{ color: rgba(47,62,58,0.70); display:block; }
+    .stat strong{ color: var(--green-dark); font-size: 15px; display:block; margin-top:4px; }
+
+    .row{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-top: 6px;
+      color: rgba(47,62,58,0.75);
+      font-size: 12.5px;
+    }
+
+    .controls label{
+      display:block;
+      margin: 10px 0 6px;
+      color: rgba(47,62,58,0.85);
+      font-weight: 800;
+      font-size: 13px;
+    }
+    .controls input[type="range"], .controls select{
+      width:100%;
+      padding: 10px;
+      border-radius: 14px;
+      border:1px solid rgba(31,95,74,0.18);
+      background: rgba(246,251,248,0.9);
+      outline:none;
+    }
+
+    .ai-status{
+      margin-top: 10px;
+      display:none;
+      padding: 12px;
+      border-radius: 16px;
+      border: 1px solid rgba(31,95,74,0.12);
+      background: rgba(246,251,248,0.85);
+      color: rgba(47,62,58,0.82);
+    }
+    .bar{ height:10px; border-radius:999px; background: rgba(31,95,74,0.10); overflow:hidden; margin-top: 8px; }
+    .bar > div{ width:0%; height:100%; background: rgba(31,95,74,0.65); transition: width .8s ease; }
+
+    .rec{
+      border:1px solid rgba(31,95,74,0.14);
+      background: rgba(123,200,164,0.18);
+      border-radius: 18px;
+      padding: 14px;
+      color: rgba(47,62,58,0.88);
+      transition: .2s ease;
+    }
+    .rec strong{ color: var(--green-dark); }
+
+    .steps{ margin-top:12px; display:grid; gap:8px; }
+    .step{
+      display:flex; gap:10px; align-items:flex-start;
+      padding: 10px; border-radius: 14px;
+      background: rgba(255,255,255,0.70);
+      border: 1px solid rgba(31,95,74,0.10);
+    }
+    .num{
+      width:26px; height:26px;
+      border-radius: 10px;
+      display:grid; place-items:center;
+      background: rgba(31,95,74,0.14);
+      color: var(--green-dark);
+      font-weight: 900;
+      flex: 0 0 auto;
+    }
+    .step div{ font-size: 13.5px; line-height: 1.6; color: rgba(47,62,58,0.84); }
+
+    .drawer-backdrop{
+      position:fixed; inset:0;
+      background: rgba(0,0,0,0.22);
+      backdrop-filter: blur(6px);
+      display:none;
+      z-index: 50;
+    }
+    .drawer{
+      position:fixed;
+      top:0; left:0;
+      height:100%;
+      width:min(420px, 92vw);
+      background: rgba(255,255,255,0.86);
+      border-right: 1px solid rgba(31,95,74,0.14);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.20);
+      transform: translateX(-110%);
+      transition: .25s ease;
+      z-index: 60;
+      padding: 16px;
+      display:grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 12px;
+    }
+    .drawer.open{ transform: translateX(0); }
+    .drawer-head{
+      display:flex; align-items:flex-start; justify-content:space-between; gap:10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(31,95,74,0.10);
+    }
+    .drawer-head h3{ margin:0; color: var(--green-dark); font-size: 17px; }
+    .drawer-head p{ margin:4px 0 0; font-size: 13px; color: rgba(47,62,58,0.78); line-height:1.6; }
+    .xbtn{
+      border: 1px solid rgba(31,95,74,0.14);
+      background: rgba(246,251,248,0.9);
+      border-radius: 12px;
+      padding: 8px 10px;
+      cursor:pointer;
+      font-weight:900;
+      color: rgba(47,62,58,0.8);
+    }
+
+    .drawer-body{
+      border-radius: 16px;
+      border: 1px solid rgba(31,95,74,0.10);
+      background: rgba(246,251,248,0.65);
+      padding: 12px;
+      overflow:auto;
+    }
+
+    .chiprow{ display:flex; gap:8px; flex-wrap:wrap; }
+    .chip{
+      font-size: 12px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(31,95,74,0.14);
+      background: rgba(255,255,255,0.75);
+      font-weight: 800;
+      color: rgba(47,62,58,0.82);
+    }
+
+    .drawer-foot{
+      display:flex; gap:10px; flex-wrap:wrap;
+      padding-top: 10px;
+      border-top: 1px solid rgba(31,95,74,0.10);
+      justify-content:space-between;
+      align-items:center;
+    }
+
+    .mini{
+      display:flex; align-items:center; gap:10px;
+      border:1px solid rgba(31,95,74,0.12);
+      background: rgba(255,255,255,0.70);
+      border-radius: 14px;
+      padding: 10px;
+      width:100%;
+    }
+    .mini canvas{ width: 140px; height: 40px; }
+    .mini strong{ color: var(--green-dark); }
+    .mini small{ color: rgba(47,62,58,0.72); display:block; }
+
+    .toast{
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      z-index: 80;
+      background: rgba(255,255,255,0.86);
+      border: 1px solid rgba(31,95,74,0.14);
+      box-shadow: 0 18px 40px rgba(0,0,0,0.12);
+      border-radius: 16px;
+      padding: 12px 12px;
+      min-width: 240px;
+      display:none;
+    }
+    .toast strong{ color: var(--green-dark); display:block; }
+    .toast span{ font-size: 13px; color: rgba(47,62,58,0.80); line-height:1.55; }
+
+    @media (max-width: 900px){
+      .grid{ grid-template-columns: 1fr; }
+      .map{ min-height: 420px; }
+      .grid2{ grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <div class="container nav">
+      <a class="brand" href="index.html">
+        <img src="assets/images/logo.png" alt="ReedGuard AI Logo">
+        <div class="name">
+          <strong>ReedGuard AI</strong>
+          <span>تحليل • تنبؤ • استدامة</span>
+        </div>
+      </a>
+
+      <nav aria-label="روابط الموقع">
+        <ul>
+          <li><a href="analysis.html">التحليل الذكي</a></li>
+          <li><a href="how-it-works.html">كيف يعمل</a></li>
+          <li><a href="impact.html">الأثر</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <section class="page-head">
+    <div class="container">
+      <div class="crumbs">
+        <a href="index.html">الرئيسية</a>
+        <span>›</span>
+        <span>التحليل الذكي</span>
+      </div>
+
+      <h1 style="margin:10px 0 6px; color: var(--green-dark); font-size: 26px;">
+        لوحة التحليل الذكي لشجرة الروغ
+      </h1>
+      <p style="margin:0; color: rgba(47,62,58,0.82); line-height:1.8; max-width: 70ch;">
+        ديمو “درجة أولى”: تفاعل مباشر + تعديل لكل منطقة + محاكاة زمنية + تقرير.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="container grid">
+      <div class="map">
+        <div class="topbar">
+          <div class="title">
+            <strong>نموذج الكشف عن الروغ</strong>
+            <small>اضغطي على أي منطقة لفتح لوحة التحكم الخاصة بها</small>
+          </div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button id="playBtn" class="btn btn-primary" type="button">▶ محاكاة 7 أيام</button>
+            <button id="exportBtn" class="btn btn-ghost" type="button">تصدير تقرير</button>
+          </div>
+        </div>
+
+        <div class="canvas">
+          <div id="heat" class="heat"></div>
+
+          <div id="zoneA" class="zone sev-harvest" style="top:28px; right:22px;">
+            <h4>منطقة A <span class="tiny" id="A_hint">انقر للتفاصيل</span></h4>
+            <div class="meta">
+              <span id="A_density" class="pill warn">كثافة: عالية</span>
+              <span id="A_risk" class="pill">خطر: متوسط</span>
+              <span id="A_rec" class="pill good">توصية: حصاد</span>
+            </div>
+          </div>
+
+          <div id="zoneB" class="zone sev-watch" style="top:150px; left:22px;">
+            <h4>منطقة B <span class="tiny" id="B_hint">انقر للتفاصيل</span></h4>
+            <div class="meta">
+              <span id="B_density" class="pill">كثافة: متوسطة</span>
+              <span id="B_risk" class="pill">خطر: منخفض</span>
+              <span id="B_rec" class="pill good">توصية: مراقبة</span>
+            </div>
+          </div>
+
+          <div id="zoneC" class="zone sev-urgent" style="bottom:26px; right:38px;">
+            <h4>منطقة C <span class="tiny" id="C_hint">انقر للتفاصيل</span></h4>
+            <div class="meta">
+              <span id="C_density" class="pill warn">كثافة: عالية</span>
+              <span id="C_risk" class="pill warn">خطر: مرتفع</span>
+              <span id="C_rec" class="pill">توصية: تدخل مبكر</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="legend">
+          <div class="legend-item"><span class="swatch"></span> مراقبة</div>
+          <div class="legend-item"><span class="swatch mid"></span> حصاد للاستفادة</div>
+          <div class="legend-item"><span class="swatch dark"></span> تدخل مبكر</div>
+        </div>
+      </div>
+
+      <div class="stack">
+
+        <div class="result controls">
+          <h3>محاكاة التحليل الذكي (Live Demo)</h3>
+          <p>أي تغيير هنا ينعكس فورًا على الخريطة + النتائج (بدون ما تضغطين زر).</p>
+
+          <label for="globalDensity">الكثافة العامة (Baseline 0–100)</label>
+          <input type="range" id="globalDensity" min="0" max="100" value="62" />
+          <div class="row">
+            <span>منخفض</span>
+            <strong id="globalDensityVal">62</strong>
+            <span>مرتفع</span>
+          </div>
+
+          <label for="humidity">مستوى الرطوبة</label>
+          <select id="humidity">
+            <option value="low">منخفضة</option>
+            <option value="medium" selected>متوسطة</option>
+            <option value="high">عالية</option>
+          </select>
+
+          <label for="proximity">قرب المنطقة من مساكن/مزارع</label>
+          <select id="proximity">
+            <option value="far" selected>بعيدة</option>
+            <option value="near">قريبة</option>
+          </select>
+
+          <label for="wind">الرياح (تزيد الانتشار)</label>
+          <select id="wind">
+            <option value="calm" selected>هادئة</option>
+            <option value="normal">متوسطة</option>
+            <option value="strong">قوية</option>
+          </select>
+
+          <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
+            <button id="runBtn" class="btn btn-primary" type="button">شغّل التحليل (يدوي)</button>
+            <button id="resetBtn" class="btn btn-ghost" type="button">إرجاع للوضع الافتراضي</button>
+          </div>
+
+          <div id="statusBox" class="ai-status">
+            <strong>جاري التحليل بالذكاء الاصطناعي...</strong>
+            <div class="bar"><div id="barFill"></div></div>
+            <div style="margin-top:8px; font-size:12.5px; opacity:.9;">
+              Vision • مؤشرات بيئية • نموذج انتشار • توصية تنفيذ
+            </div>
+          </div>
+        </div>
+
+        <div class="result">
+          <h3>ملخص النتائج (Live)</h3>
+          <p id="summaryText">
+            النظام يحدّد مناطق الروغ حسب الكثافة، ثم يدمج مؤشرات بيئية للتنبؤ بالانتشار، ويقدّم قرارًا عمليًا.
+          </p>
+
+          <div class="grid2">
+            <div class="stat">
+              <small>اليوم في المحاكاة</small>
+              <strong id="dayLabel">اليوم 0</strong>
+            </div>
+            <div class="stat">
+              <small>متوسط الكثافة</small>
+              <strong id="avgDensity">متوسطة</strong>
+            </div>
+            <div class="stat">
+              <small>مؤشر المخاطر</small>
+              <strong id="riskIndex">متوسط</strong>
+            </div>
+            <div class="stat">
+              <small>ثقة الذكاء (Confidence)</small>
+              <strong id="confidence">82%</strong>
+            </div>
+          </div>
+
+          <div style="margin-top:12px;" class="mini">
+            <div style="flex:1;">
+              <strong>اتجاه المخاطر</strong>
+              <small>آخر 8 تحديثات</small>
+            </div>
+            <canvas id="spark" width="140" height="40" aria-label="Risk Trend"></canvas>
+          </div>
+        </div>
+
+        <div class="result">
+          <h3>توصية ReedGuard AI</h3>
+          <div id="recBox" class="rec">
+            <strong>القرار المقترح:</strong>
+            <span id="decisionText">
+              حصاد الروغ في المناطق عالية الكثافة للاستفادة منه كمورد، مع تدخل مبكر للمناطق مرتفعة الخطر.
+            </span>
+          </div>
+
+          <div class="steps" aria-label="خطوات تنفيذ مقترحة">
+            <div class="step">
+              <span class="num">1</span>
+              <div id="step1">تحديد الأولويات حسب: الكثافة + الخطر + حساسية الموقع.</div>
+            </div>
+            <div class="step">
+              <span class="num">2</span>
+              <div id="step2">تشغيل خطة حصاد موجّه للاستفادة بدل الإزالة العشوائية.</div>
+            </div>
+            <div class="step">
+              <span class="num">3</span>
+              <div id="step3">مراقبة دورية وتحديث النموذج بالصور لضمان تدخل مبكر مستمر.</div>
+            </div>
+          </div>
+
+          <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
+            <a class="btn btn-primary" href="impact.html">شوف الأثر المتوقع</a>
+            <a class="btn btn-ghost" href="index.html">رجوع للرئيسية</a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container footer-row">
+      <div>© ReedGuard AI</div>
+      <div>صفحة التحليل الذكي • نسخة عرض تفاعلية</div>
+    </div>
+  </footer>
+
+  <div id="backdrop" class="drawer-backdrop"></div>
+  <aside id="drawer" class="drawer" aria-label="Zone Details">
+    <div class="drawer-head">
+      <div>
+        <h3 id="drawerTitle">تفاصيل المنطقة</h3>
+        <p id="drawerDesc">تحكم بكثافة المنطقة نفسها (Overrides) وشوف كيف تتغير فورًا.</p>
+      </div>
+      <button class="xbtn" id="closeDrawer">✕</button>
+    </div>
+
+    <div class="drawer-body controls">
+      <div class="chiprow" style="margin-bottom:10px;">
+        <span class="chip" id="chipDensity">Density: --</span>
+        <span class="chip" id="chipRisk">Risk: --</span>
+        <span class="chip" id="chipRec">Rec: --</span>
+      </div>
+
+      <label for="zoneDensity">كثافة المنطقة (Override 0–100)</label>
+      <input type="range" id="zoneDensity" min="0" max="100" value="60" />
+      <div class="row">
+        <span>0</span>
+        <strong id="zoneDensityVal">60</strong>
+        <span>100</span>
+      </div>
+
+      <label for="sensitivity">حساسية الموقع</label>
+      <select id="sensitivity">
+        <option value="normal" selected>عادية</option>
+        <option value="sensitive">حساسة (قريبة/محمية)</option>
+      </select>
+
+      <label for="action">تدخل ميداني (Simulation)</label>
+      <select id="action">
+        <option value="none" selected>بدون تدخل</option>
+        <option value="harvest">حصاد</option>
+        <option value="urgent">تدخل مبكر</option>
+      </select>
+
+      <p style="margin:12px 0 0; font-size:13px; color: rgba(47,62,58,0.78); line-height:1.7;">
+        * الهدف هنا “إقناع المحكّم”: النظام يدعم قرار لكل منطقة، وليس قرار عام فقط.
+      </p>
+    </div>
+
+    <div class="drawer-foot">
+      <button id="applyZone" class="btn btn-primary" type="button">تطبيق على المنطقة</button>
+      <button id="resetZone" class="btn btn-ghost" type="button">إلغاء Override</button>
+    </div>
+  </aside>
+
+  <div id="toast" class="toast" role="status" aria-live="polite">
+    <strong id="toastTitle">تم التحديث</strong>
+    <span id="toastText">تم تحديث الخريطة والنتائج مباشرة.</span>
+  </div>
+
+  <script>
+   
+    const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+    const lerp = (a,b,t)=> a+(b-a)*t;
+
+    function debounce(fn, ms=180){
+      let t;
+      return (...args)=>{
+        clearTimeout(t);
+        t = setTimeout(()=>fn(...args), ms);
+      };
+    }
+
+    function toast(title, text){
+      const box = document.getElementById("toast");
+      document.getElementById("toastTitle").textContent = title;
+      document.getElementById("toastText").textContent = text;
+      box.style.display = "block";
+      box.style.opacity = "0";
+      box.style.transform = "translateY(8px)";
+      requestAnimationFrame(()=>{
+        box.style.transition = ".2s ease";
+        box.style.opacity = "1";
+        box.style.transform = "translateY(0)";
+      });
+      setTimeout(()=>{
+        box.style.opacity = "0";
+        box.style.transform = "translateY(8px)";
+        setTimeout(()=> box.style.display="none", 220);
+      }, 1200);
+    }
+
+    function levelFromDensity(v){
+      if(v >= 70) return "عالية";
+      if(v >= 40) return "متوسطة";
+      return "منخفضة";
+    }
+
+    function labelRisk(score){
+      if(score >= 90) return "مرتفع";
+      if(score >= 55) return "متوسط";
+      return "منخفض";
+    }
+
+    function recFromRisk(score, dens, proxIsNear){
+      if(score >= 92 || (score >= 86 && proxIsNear)) return "تدخل مبكر";
+      if(dens >= 58 && score >= 55) return "حصاد";
+      return "مراقبة";
+    }
+
+
+    const globalDensity = document.getElementById("globalDensity");
+    const globalDensityVal = document.getElementById("globalDensityVal");
+    const humidity = document.getElementById("humidity");
+    const proximity = document.getElementById("proximity");
+    const wind = document.getElementById("wind");
+
+    const runBtn = document.getElementById("runBtn");
+    const resetBtn = document.getElementById("resetBtn");
+    const statusBox = document.getElementById("statusBox");
+    const barFill = document.getElementById("barFill");
+
+    const avgDensity = document.getElementById("avgDensity");
+    const riskIndex = document.getElementById("riskIndex");
+    const confidenceEl = document.getElementById("confidence");
+    const summaryText = document.getElementById("summaryText");
+    const dayLabel = document.getElementById("dayLabel");
+
+    const decisionText = document.getElementById("decisionText");
+    const recBox = document.getElementById("recBox");
+    const step1 = document.getElementById("step1");
+    const step2 = document.getElementById("step2");
+    const step3 = document.getElementById("step3");
+
+    const heat = document.getElementById("heat");
+
+    const zonesEls = {
+      A: document.getElementById("zoneA"),
+      B: document.getElementById("zoneB"),
+      C: document.getElementById("zoneC"),
+    };
+
+    const backdrop = document.getElementById("backdrop");
+    const drawer = document.getElementById("drawer");
+    const closeDrawer = document.getElementById("closeDrawer");
+    const drawerTitle = document.getElementById("drawerTitle");
+    const chipDensity = document.getElementById("chipDensity");
+    const chipRisk = document.getElementById("chipRisk");
+    const chipRec = document.getElementById("chipRec");
+
+    const zoneDensity = document.getElementById("zoneDensity");
+    const zoneDensityVal = document.getElementById("zoneDensityVal");
+    const sensitivity = document.getElementById("sensitivity");
+    const action = document.getElementById("action");
+    const applyZone = document.getElementById("applyZone");
+    const resetZone = document.getElementById("resetZone");
+
+    const playBtn = document.getElementById("playBtn");
+    const exportBtn = document.getElementById("exportBtn");
+
+    const spark = document.getElementById("spark");
+    const sctx = spark.getContext("2d");
+    const trend = []; 
+
+ 
+    const base = {
+      day: 0,
+      playing: false,
+      timer: null,
+      selectedZone: null,
+      zoneBias: { A: 10, B: -18, C: 6 },
+      overrides: {
+        A: null, 
+        B: null,
+        C: null
+      }
+    };
+
+    function envWeights(){
+      const hum = humidity.value;
+      const prox = proximity.value;
+      const w = wind.value;
+
+      let humW = 0;
+      if(hum === "high") humW = 14;
+      if(hum === "low") humW = -6;
+
+      let proxW = (prox === "near") ? 18 : 0;
+
+      let windW = 0;
+      if(w === "normal") windW = 6;
+      if(w === "strong") windW = 12;
+
+      return { humW, proxW, windW };
+    }
+
+    function computeRisk(densityValue, zoneKey, sens="normal"){
+      const { humW, proxW, windW } = envWeights();
+      const sensW = (sens === "sensitive") ? 10 : 0;
+      const bias = base.zoneBias[zoneKey] || 0;
+
+      const score = clamp(densityValue + humW + proxW + windW + sensW + bias, 0, 120);
+      return score;
+    }
+
+    function setZoneTexts(prefix, densLabel, riskLabel, recLabel){
+      const densEl = document.getElementById(prefix+"_density");
+      const riskEl = document.getElementById(prefix+"_risk");
+      const recEl  = document.getElementById(prefix+"_rec");
+
+      densEl.textContent = "كثافة: " + densLabel;
+      riskEl.textContent = "خطر: " + riskLabel;
+      recEl.textContent  = "توصية: " + recLabel;
+
+      densEl.classList.toggle("warn", densLabel === "عالية");
+      riskEl.classList.toggle("warn", riskLabel === "مرتفع");
+      recEl.classList.toggle("warn", recLabel === "تدخل مبكر");
+      recEl.classList.toggle("good", recLabel !== "تدخل مبكر");
+    }
+
+    function setZoneStyle(zoneEl, recLabel){
+      zoneEl.classList.remove("sev-watch","sev-harvest","sev-urgent");
+      zoneEl.classList.add(
+        recLabel === "تدخل مبكر" ? "sev-urgent" :
+        recLabel === "حصاد" ? "sev-harvest" : "sev-watch"
+      );
+    }
+
+    function updateHeat(zA, zB, zC){
+      const a = clamp(zA/120, 0, 1);
+      const b = clamp(zB/120, 0, 1);
+      const c = clamp(zC/120, 0, 1);
+
+      heat.style.setProperty("--a", a);
+      heat.style.setProperty("--b", b);
+      heat.style.setProperty("--c", c);
+
+      heat.style.opacity = 0.55 + (Math.max(a,b,c) * 0.35);
+
+      heat.style.setProperty("filter", `blur(${12 + Math.max(a,b,c)*10}px) saturate(${1.1 + Math.max(a,b,c)*0.6})`);
+
+      heat.style.setProperty("transform", `translateZ(0) scale(${1 + Math.max(a,b,c)*0.03})`);
+
+      heat.style.setProperty("mix-blend-mode", "multiply");
+
+      heat.style.setProperty("background", "transparent");
+
+      heat.innerHTML = ""; 
+
+      const blob = document.createElement("div");
+      blob.style.position="absolute";
+      blob.style.inset="0";
+      blob.style.transition=".35s ease";
+      blob.style.background = `
+        radial-gradient(240px 220px at 78% 18%, rgba(235,74,74,${0.08 + a*0.18}), transparent 60%),
+        radial-gradient(260px 240px at 20% 42%, rgba(235,74,74,${0.06 + b*0.18}), transparent 60%),
+        radial-gradient(280px 260px at 68% 82%, rgba(235,74,74,${0.10 + c*0.20}), transparent 60%)
+      `;
+      heat.appendChild(blob);
+    }
+
+    function confidenceFrom(scoreAvg){
+      let c = 78;
+      if(scoreAvg >= 85) c = 88;
+      else if(scoreAvg >= 65) c = 84;
+      else if(scoreAvg <= 40) c = 81;
+      c += (humidity.value === "high") ? 2 : 0;
+      c -= (wind.value === "strong") ? 1 : 0;
+      return clamp(c, 76, 92);
+    }
+
+    function setRecommendation(globalDecision){
+      if(globalDecision === "تدخل مبكر"){
+        decisionText.textContent =
+          "تدخل مبكر مطلوب فورًا في المناطق مرتفعة الخطر (خصوصًا قرب المساكن/المزارع). بعد خفض الخطر: تنفيذ حصاد موجّه للاستفادة.";
+        recBox.style.background = "rgba(235,74,74,0.10)";
+        step1.textContent = "رفع أولوية المناطق الحساسة: كثافة + خطر + قرب/حساسية الموقع.";
+        step2.textContent = "تدخل ميداني مبكر (عزل/تنظيف/منع تمدد) خلال 24–48 ساعة.";
+        step3.textContent = "تحديث أسبوعي للصور + تقييم بعد التدخل ثم حصاد موجّه لاحقًا.";
+      } else if(globalDecision === "حصاد"){
+        decisionText.textContent =
+          "حصاد موجّه في مناطق الكثافة المتوسطة/العالية للاستفادة (مواد/طاقة حيوية) مع مراقبة الأطراف لمنع إعادة الانتشار.";
+        recBox.style.background = "rgba(31,95,74,0.14)";
+        step1.textContent = "تحديد مناطق الحصاد حسب الكثافة والظروف البيئية الحالية.";
+        step2.textContent = "تنفيذ حصاد موجّه للاستفادة بدل الإزالة العشوائية.";
+        step3.textContent = "مراقبة الأطراف وتحديث البيانات دوريًا لمنع عودة الانتشار.";
+      } else {
+        decisionText.textContent =
+          "مراقبة دورية مع تحديث البيانات (تصوير/مؤشرات) والتحول لخطة حصاد/تدخل مبكر مباشرة عند ارتفاع المؤشر.";
+        recBox.style.background = "rgba(123,200,164,0.12)";
+        step1.textContent = "تحديد نقاط مراقبة ثابتة + تصوير دوري.";
+        step2.textContent = "تحديث النموذج بالبيانات الجديدة لرصد أي تصاعد.";
+        step3.textContent = "تشغيل خطة حصاد/تدخل مبكر عند تجاوز العتبات.";
+      }
+    }
+
+    function drawSparkline(values){
+      sctx.clearRect(0,0,spark.width,spark.height);
+
+      sctx.globalAlpha = 0.7;
+      sctx.beginPath();
+      sctx.moveTo(0, spark.height-1);
+      sctx.lineTo(spark.width, spark.height-1);
+      sctx.strokeStyle = "rgba(31,95,74,0.25)";
+      sctx.lineWidth = 1;
+      sctx.stroke();
+
+      if(values.length < 2) return;
+
+      const minV = 0;
+      const maxV = 120;
+
+      sctx.globalAlpha = 1;
+      sctx.beginPath();
+      values.forEach((v,i)=>{
+        const x = (i/(values.length-1)) * (spark.width-2) + 1;
+        const t = (v-minV)/(maxV-minV);
+        const y = (spark.height-4) - t*(spark.height-6) + 2;
+        if(i===0) sctx.moveTo(x,y);
+        else sctx.lineTo(x,y);
+      });
+      sctx.strokeStyle = "rgba(31,95,74,0.75)";
+      sctx.lineWidth = 2;
+      sctx.stroke();
+
+      const last = values[values.length-1];
+      const t = (last-minV)/(maxV-minV);
+      const x = (spark.width-2) + 1;
+      const y = (spark.height-4) - t*(spark.height-6) + 2;
+      sctx.beginPath();
+      sctx.arc(x,y,2.8,0,Math.PI*2);
+      sctx.fillStyle = "rgba(31,95,74,0.75)";
+      sctx.fill();
+    }
+
+   
+    function showLoading(){
+      statusBox.style.display = "block";
+      barFill.style.width = "0%";
+      setTimeout(()=> barFill.style.width = "88%", 30);
+    }
+    function hideLoading(){
+      barFill.style.width = "100%";
+      setTimeout(()=>{ statusBox.style.display = "none"; }, 220);
+    }
+
+    function currentZoneDensity(zoneKey){
+      const g = Number(globalDensity.value);
+      const ov = base.overrides[zoneKey];
+      if(ov && typeof ov.density === "number") return clamp(ov.density, 0, 100);
+      return clamp(g + (base.zoneBias[zoneKey] * 0.6), 0, 100);
+    }
+
+    function runAnalysis({silent=false, withLoading=false}={}){
+      const proxIsNear = (proximity.value === "near");
+
+      if(withLoading) showLoading();
+
+      const results = {};
+      ["A","B","C"].forEach(k=>{
+        const dens = currentZoneDensity(k);
+        const ov = base.overrides[k];
+        const sens = ov?.sensitivity || "normal";
+
+        let score = computeRisk(dens, k, sens);
+
+        const act = ov?.action || "none";
+        if(act === "harvest") score = clamp(score - 10, 0, 120);
+        if(act === "urgent") score = clamp(score - 18, 0, 120);
+
+        const riskLabel = labelRisk(score);
+        const densLabel = levelFromDensity(dens);
+        const recLabel = (act === "urgent") ? "تدخل مبكر"
+                       : (act === "harvest") ? "حصاد"
+                       : recFromRisk(score, dens, proxIsNear);
+
+        results[k] = { dens, densLabel, score, riskLabel, recLabel, sens, act };
+      });
+
+      Object.entries(results).forEach(([k,r])=>{
+        setZoneTexts(k, r.densLabel, r.riskLabel, r.recLabel);
+        setZoneStyle(zonesEls[k], r.recLabel);
+      });
+
+      updateHeat(results.A.score, results.B.score, results.C.score);
+
+      const avgD = (results.A.dens + results.B.dens + results.C.dens) / 3;
+      const avgScore = (results.A.score + results.B.score + results.C.score) / 3;
+
+      avgDensity.textContent = levelFromDensity(avgD);
+      riskIndex.textContent = labelRisk(avgScore);
+
+      const conf = confidenceFrom(avgScore);
+      confidenceEl.textContent = conf + "%";
+
+      dayLabel.textContent = "اليوم " + base.day;
+
+      const globalDecision =
+        (avgScore >= 90 || (proximity.value==="near" && (results.A.score>=90 || results.C.score>=90))) ? "تدخل مبكر" :
+        (avgD >= 58 && avgScore >= 55) ? "حصاد" : "مراقبة";
+
+      setRecommendation(globalDecision);
+
+      summaryText.textContent =
+        `تم تحديث التحليل (${humidity.options[humidity.selectedIndex].text} • ${proximity.options[proximity.selectedIndex].text} • رياح ${wind.options[wind.selectedIndex].text}). ` +
+        `متوسط الكثافة: ${levelFromDensity(avgD)}، ومؤشر المخاطر: ${labelRisk(avgScore)}. ` +
+        `القرار العام: ${globalDecision}. (انقري أي منطقة لتعديلها منفصلًا).`;
+
+      trend.push(avgScore);
+      while(trend.length > 8) trend.shift();
+      drawSparkline(trend);
+
+      if(base.selectedZone){
+        const z = results[base.selectedZone];
+        chipDensity.textContent = `Density: ${Math.round(z.dens)}`;
+        chipRisk.textContent = `Risk: ${z.riskLabel} (${Math.round(z.score)})`;
+        chipRec.textContent = `Rec: ${z.recLabel}`;
+      }
+
+      if(withLoading) hideLoading();
+      if(!silent) toast("تم التحديث", "الخريطة والنتائج تغيّرت مباشرة.");
+      return results;
+    }
+
+    globalDensity.addEventListener("input", ()=>{
+      globalDensityVal.textContent = globalDensity.value;
+      debouncedLive();
+    });
+
+    const debouncedLive = debounce(()=> runAnalysis({silent:true}), 160);
+
+    [humidity, proximity, wind].forEach(el=>{
+      el.addEventListener("change", ()=> runAnalysis({silent:false, withLoading:true}));
+    });
+
+    runBtn.addEventListener("click", ()=> runAnalysis({silent:false, withLoading:true}));
+
+    resetBtn.addEventListener("click", ()=>{
+      base.day = 0;
+      globalDensity.value = 62;
+      globalDensityVal.textContent = "62";
+      humidity.value = "medium";
+      proximity.value = "far";
+      wind.value = "calm";
+      base.overrides = {A:null,B:null,C:null};
+      runAnalysis({silent:false, withLoading:true});
+    });
+
+
+    function openDrawer(zoneKey){
+      base.selectedZone = zoneKey;
+
+      Object.entries(zonesEls).forEach(([k,el])=>{
+        el.classList.toggle("active", k===zoneKey);
+      });
+
+      const ov = base.overrides[zoneKey];
+      drawerTitle.textContent = `تفاصيل منطقة ${zoneKey}`;
+
+      const current = currentZoneDensity(zoneKey);
+      zoneDensity.value = Math.round(current);
+      zoneDensityVal.textContent = String(Math.round(current));
+      sensitivity.value = ov?.sensitivity || "normal";
+      action.value = ov?.action || "none";
+
+      backdrop.style.display = "block";
+      drawer.classList.add("open");
+
+      runAnalysis({silent:true}); 
+    }
+
+    function closeDrawerFn(){
+      drawer.classList.remove("open");
+      backdrop.style.display = "none";
+      base.selectedZone = null;
+      Object.values(zonesEls).forEach(el=> el.classList.remove("active"));
+    }
+
+    Object.entries(zonesEls).forEach(([k,el])=>{
+      el.addEventListener("click", ()=> openDrawer(k));
+    });
+
+    closeDrawer.addEventListener("click", closeDrawerFn);
+    backdrop.addEventListener("click", closeDrawerFn);
+
+    zoneDensity.addEventListener("input", ()=>{
+      zoneDensityVal.textContent = zoneDensity.value;
+    });
+
+    applyZone.addEventListener("click", ()=>{
+      if(!base.selectedZone) return;
+      base.overrides[base.selectedZone] = {
+        density: Number(zoneDensity.value),
+        sensitivity: sensitivity.value,
+        action: action.value
+      };
+      runAnalysis({silent:false, withLoading:true});
+    });
+
+    resetZone.addEventListener("click", ()=>{
+      if(!base.selectedZone) return;
+      base.overrides[base.selectedZone] = null;
+      openDrawer(base.selectedZone); 
+      runAnalysis({silent:false, withLoading:true});
+    });
+
+  
+    function growthFactor(){
+      let g = 0.0;
+      if(humidity.value === "high") g += 0.09;
+      if(humidity.value === "medium") g += 0.05;
+      if(humidity.value === "low") g += 0.02;
+
+      if(wind.value === "strong") g += 0.05;
+      if(wind.value === "normal") g += 0.03;
+
+      if(proximity.value === "near") g += 0.02;
+
+      return g; 
+    }
+
+    function simulateDay(){
+      const g = growthFactor();
+      const baseD = Number(globalDensity.value);
+
+      const noise = (Math.random()*2 - 1) * 2.2; 
+      const next = clamp(baseD + (baseD * g * 0.35) + noise, 0, 100);
+
+      globalDensity.value = Math.round(next);
+      globalDensityVal.textContent = globalDensity.value;
+
+      ["A","B","C"].forEach(k=>{
+        const ov = base.overrides[k];
+        if(!ov) return;
+        let d = Number(ov.density);
+
+        if(ov.action === "urgent") d = clamp(d - (6 + Math.random()*2), 0, 100);
+        if(ov.action === "harvest") d = clamp(d - (4 + Math.random()*2), 0, 100);
+
+        if(ov.action === "none") d = clamp(d + (1.2 + Math.random()*1.2), 0, 100);
+
+        base.overrides[k] = {...ov, density: Math.round(d)};
+      });
+
+      base.day += 1;
+      runAnalysis({silent:true});
+    }
+
+    function startSimulation(){
+      if(base.playing) return;
+      base.playing = true;
+      playBtn.textContent = "⏸ إيقاف المحاكاة";
+      toast("محاكاة بدأت", "جاري تشغيل سيناريو 7 أيام...");
+      let count = 0;
+
+      base.timer = setInterval(()=>{
+        simulateDay();
+        count += 1;
+        if(count >= 7){
+          stopSimulation();
+          toast("انتهت المحاكاة", "تمت محاكاة 7 أيام بنجاح.");
+        }
+      }, 850);
+    }
+
+    function stopSimulation(){
+      base.playing = false;
+      playBtn.textContent = "▶ محاكاة 7 أيام";
+      if(base.timer) clearInterval(base.timer);
+      base.timer = null;
+    }
+
+    playBtn.addEventListener("click", ()=>{
+      if(base.playing) stopSimulation();
+      else startSimulation();
+    });
+
+
+    exportBtn.addEventListener("click", ()=>{
+      const snapshot = runAnalysis({silent:true});
+      const report = {
+        product: "ReedGuard AI",
+        timestamp: new Date().toISOString(),
+        env: {
+          baseline_density: Number(globalDensity.value),
+          humidity: humidity.value,
+          proximity: proximity.value,
+          wind: wind.value,
+          day: base.day
+        },
+        zones: snapshot,
+        notes: "Demo report for hackathon judging (simulated data)."
+      };
+
+      const blob = new Blob([JSON.stringify(report, null, 2)], {type:"application/json"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "reedguard_report.json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+
+      toast("تم التصدير", "طلع لك ملف تقرير JSON للمحكّم.");
+    });
+
+ 
+    window.addEventListener("load", ()=>{
+      globalDensityVal.textContent = globalDensity.value;
+      runAnalysis({silent:true, withLoading:true});
+    });
+  </script>
+</body>
+</html>
